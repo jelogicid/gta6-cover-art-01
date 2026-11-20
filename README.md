@@ -15,7 +15,7 @@ node serve.ts                                          # then open http://localh
 ```
 
 Palm Coast Cover Lab is a static site under `app/`: no build step, no package install, no network request. It opens
-with five sample scenes already in the photo pool, and the poster is painted at export resolution by the same
+with six sample photographs already in the photo pool, and the poster is painted at export resolution by the same
 function that paints the preview.
 
 - **Panels.** Five layouts — four-up, six-up, nine-up, hero-and-three, tilted snapshots — with a photo per panel or one
@@ -27,8 +27,9 @@ function that paints the preview.
 - **Editing.** Title and caption with length caps, per-panel reset, undo/redo, drag-and-drop photos, keyboard shortcuts
   (`1`–`5` layouts, `6`–`9` grades, `Z` / `Shift+Z` history, `E` export) and a live status line.
 - **Export.** One renderer at 1080x1080, 1080x1350 and 1920x1080, PNG, downloaded locally.
-- **Fonts and art.** Noto Sans Black (SIL OFL 1.1, licence in `app/fonts/OFL.txt`) plus five sample images drawn for
-  this app. No Rockstar Games logo, wordmark, artwork, character or font is used.
+- **Fonts and art.** Noto Sans Black (SIL OFL 1.1, licence in `app/fonts/OFL.txt`) plus six sample photographs, all
+  crops of the two kit photos that ship free for this bounty. No Rockstar Games logo, wordmark, artwork, character or
+  font is used.
 
 ---
 

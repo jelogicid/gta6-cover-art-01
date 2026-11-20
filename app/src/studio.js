@@ -104,6 +104,9 @@ export async function createStudio(state) {
     for (const el of ui.layouts.children) el.classList.toggle('on', el.dataset.layout === state.layout);
     for (const el of ui.palettes.children) el.classList.toggle('on', el.dataset.palette === state.palette);
     for (const el of ui.sizes.children) el.classList.toggle('on', el.dataset.size === state.size);
+    for (const el of ui.exports.querySelectorAll('[data-size]')) {
+      el.classList.toggle('cta', el.dataset.size === state.size);
+    }
     for (const el of ui.pool.children) {
       const id = el.dataset.photo;
       el.classList.toggle('used', state.panels.some((p) => p.photo === id));

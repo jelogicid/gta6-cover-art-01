@@ -68,9 +68,9 @@ for (const shot of shots) {
   if (isEditor) {
     const png = await page.screenshot({ type: 'png' });
     dims = { w: shot.w, h: shot.h };
-    buf = await encode(scratch, png, 'image/png', 92, dims, null);
-    for (const q of [88, 84, 80]) {
-      if (buf.length <= CAP) break;
+    buf = await encode(scratch, png, 'image/png', 88, dims, null);
+    for (const q of [84, 80, 76]) {
+      if (buf.length <= 240 * 1024) break;
       buf = await encode(scratch, buf, 'image/jpeg', q, dims, null);
     }
   } else {

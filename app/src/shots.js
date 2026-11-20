@@ -5,7 +5,7 @@ import { drawCover, loadCoverFont, SIZES } from './render.js';
 import { createState, loadSamplePhotos, addPhotos, syncPanels } from './state.js';
 import { createStudio } from './studio.js';
 
-const DEFAULT_PHOTOS = ['sunset-palms', 'boulevard', 'night-drive', 'pier', 'poolside'];
+const DEFAULT_PHOTOS = ['gold-hour', 'palm-line', 'the-car', 'pier', 'low-tide', 'the-rod'];
 
 function pickPhotos(value) {
   const wanted = (value || '').split(',').map((s) => s.trim()).filter(Boolean);
@@ -76,7 +76,7 @@ export async function runEditorShot(q) {
     state.selected = Math.min(state.panels.length - 1, Math.max(0, Number(q.get('select')) - 1));
   }
   studio.reload();
-  studio.setStatus('5 sample photos · drag to crop · paste your caption · export PNG', 'ok');
+  studio.setStatus(`${state.photos.length} sample photos · drag to crop · paste your caption · export PNG`, 'ok');
 
   if (q.get('scroll')) {
     document.querySelector('.scroll').scrollTop = Number(q.get('scroll'));

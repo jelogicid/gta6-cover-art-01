@@ -170,15 +170,19 @@ export function drawCover(canvas, state, opts = {}) {
   ctx.fillRect(geo.area.x, geo.area.y, geo.area.w, geo.area.h);
   ctx.restore();
 
-  // the grade sits over the photographs only; chrome and plates are re-inked on top
+  // the grade sits over the photographs only; the seal sits over the grid, labels ink on top of it
+  if (!layout.tilt) {
+    for (let i = 0; i < geo.panels.length; i++) panelFrame(ctx, geo.panels[i], pal);
+  }
+  drawSeal(ctx, geo, state, pal, W, H);
   if (!layout.tilt) {
     for (let i = 0; i < geo.panels.length; i++) {
-      panelFrame(ctx, geo.panels[i], pal);
       panelLettering(ctx, geo.panels[i], state.panels[i] || {}, i, pal, Math.min(W, H));
     }
   }
 
   drawHeader(ctx, header, state, pal, isWide);
+  drawHeroBust(ctx, geo, state, pal);
   drawFooter(ctx, footer, state, pal, isWide);
   filmGrain(ctx, W, H, state.seed || 7);
 
@@ -349,15 +353,8 @@ function drawSnapshotCard(ctx, rect, photo, panel, pal, index) {
 }
 
 function drawPhoto(ctx, img, rect, panel, pal, index) {
-  const zoom = Math.max(1, panel.zoom || 1);
-  const base = Math.max(rect.w / img.naturalWidth, rect.h / img.naturalHeight);
-  const scale = base * zoom;
-  const dw = img.naturalWidth * scale;
-  const dh = img.naturalHeight * scale;
-  const fx = clamp(panel.cx ?? 0.5, rect.w / (2 * dw), 1 - rect.w / (2 * dw));
-  const fy = clamp(panel.cy ?? 0.45, rect.h / (2 * dh), 1 - rect.h / (2 * dh));
-  const x = rect.x + rect.w / 2 - fx * dw;
-  const y = rect.y + rect.h / 2 - fy * dh;
+  const t = photoTransform(img, rect, panel);
+  const x = t.x, y = t.y, dw = t.dw, dh = t.dh;
 
   ctx.save();
   ctx.beginPath();
@@ -410,6 +407,17 @@ function drawPhoto(ctx, img, rect, panel, pal, index) {
   ctx.restore();
 }
 
+function photoTransform(img, rect, panel) {
+  const zoom = Math.max(1, panel.zoom || 1);
+  const base = Math.max(rect.w / img.naturalWidth, rect.h / img.naturalHeight);
+  const scale = base * zoom;
+  const dw = img.naturalWidth * scale;
+  const dh = img.naturalHeight * scale;
+  const fx = clamp(panel.cx ?? 0.5, rect.w / (2 * dw), 1 - rect.w / (2 * dw));
+  const fy = clamp(panel.cy ?? 0.45, rect.h / (2 * dh), 1 - rect.h / (2 * dh));
+  return { x: rect.x + rect.w / 2 - fx * dw, y: rect.y + rect.h / 2 - fy * dh, dw, dh, scale };
+}
+
 function panelFinish(ctx, rect, pal, index) {
   // halftone print screen
   ctx.save();
@@ -426,23 +434,6 @@ function panelFinish(ctx, rect, pal, index) {
   const step = Math.max(3, rect.h * 0.012);
   for (let y = rect.y; y < rect.y + rect.h; y += step) ctx.fillRect(rect.x, y, rect.w, Math.max(1, step * 0.28));
   ctx.restore();
-
-  // a corner wedge of accent colour
-  if (rect.w > 120 && rect.h > 90) {
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(rect.x, rect.y, rect.w, rect.h);
-    ctx.clip();
-    ctx.globalAlpha = 0.85;
-    ctx.fillStyle = pal.accent;
-    ctx.beginPath();
-    ctx.moveTo(rect.x + rect.w, rect.y);
-    ctx.lineTo(rect.x + rect.w, rect.y + rect.h * 0.055);
-    ctx.lineTo(rect.x + rect.w - rect.w * 0.16, rect.y);
-    ctx.closePath();
-    ctx.fill();
-    ctx.restore();
-  }
   void index;
 }
 
@@ -483,13 +474,13 @@ function panelLettering(ctx, rect, panel, index, pal, base) {
   const padX = fs * 0.55, ph = fs * 1.55;
   const px = rect.x + fs * 0.6;
   const py = rect.y + rect.h - ph - fs * 0.6;
-  ctx.fillStyle = pal.ink;
-  ctx.fillRect(px + fs * 0.14, py + fs * 0.14, tw + padX * 2, ph);
+  ctx.fillStyle = hexAlpha(pal.ink, 0.9);
+  ctx.fillRect(px, py, tw + padX * 2 + fs * 0.5, ph);
   ctx.fillStyle = pal.accent;
-  ctx.fillRect(px, py, tw + padX * 2, ph);
-  ctx.fillStyle = pal.ink;
+  ctx.fillRect(px, py, fs * 0.22, ph);
+  ctx.fillStyle = pal.cream;
   ctx.save();
-  ctx.translate(px + padX, py + ph * 0.73);
+  ctx.translate(px + padX + fs * 0.45, py + ph * 0.73);
   ctx.scale(CONDENSE, 1);
   ctx.fillText(label, 0, 0);
   ctx.restore();
@@ -628,16 +619,14 @@ function drawFooter(ctx, footer, state, pal, isWide) {
   ctx.fillRect(footer.x, ruleY, footer.w * 0.18, Math.max(2, footer.h * 0.03));
 
   if (caption) {
-    const maxW = footer.w * (isWide ? 0.62 : 0.56);
-    const size = Math.min(footer.h * 0.6, fitSize(ctx, caption, maxW, footer.h * 0.6).size);
+    const maxW = footer.w * (isWide ? 0.5 : 0.48);
+    const size = Math.min(footer.h * 0.5, fitSize(ctx, caption, maxW, footer.h * 0.5).size);
     ctx.save();
     ctx.font = `900 ${size}px ${FONT_FAMILY}`;
-    ctx.letterSpacing = `${size * 0.04}px`;
-    ctx.translate(footer.x, footer.y + footer.h * 0.62);
+    ctx.letterSpacing = `${size * 0.16}px`;
+    ctx.translate(footer.x, footer.y + footer.h * 0.58);
     ctx.scale(CONDENSE, 1);
-    ctx.fillStyle = pal.ink;
-    ctx.fillText(caption, size * 0.03, size * 0.04);
-    ctx.fillStyle = pal.accent2;
+    ctx.fillStyle = hexAlpha(pal.cream, 0.92);
     ctx.fillText(caption, 0, 0);
     ctx.restore();
   }
@@ -729,6 +718,219 @@ function drawSelection(ctx, rect, index, pal) {
   ctx.fillText(label, tx + fs * 0.55, ty + th * 0.54);
   ctx.textBaseline = 'alphabetic';
   ctx.letterSpacing = '0px';
+  ctx.restore();
+}
+
+function drawHeroBust(ctx, geo, state, pal) {
+  if (geo.tilt || state.layout !== 'hero' || !geo.panels.length) return;
+  const panel = state.panels[0] || {};
+  const photo = state.photos && state.photos.find((p) => p.id === panel.photo);
+  if (!photo || !photo.img || !photo.img.naturalWidth || !photo.face) return;
+  const rect = geo.panels[0];
+
+  // only the part above the frame is drawn; the panel below keeps its own photo, so no duplicate
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(0, 0, ctx.canvas.width, rect.y + 2);
+  ctx.clip();
+
+  const t = photoTransform(photo.img, rect, panel);
+  const faceX = t.x + photo.face.fx * t.dw;
+  const faceY = t.y + photo.face.fy * t.dh;
+  const rx = Math.min(rect.w * 0.17, t.dw * 0.17);
+  const ry = Math.min(rect.h * 0.4, t.dh * 0.4);
+  const cx = clamp(faceX, rect.x + rx * 0.6, rect.x + rect.w - rx * 0.6);
+  const cy = faceY;
+  const pad = Math.ceil(Math.max(rx, ry) * 0.04);
+
+  const off = document.createElement('canvas');
+  off.width = Math.ceil(rx * 2 + pad * 2);
+  off.height = Math.ceil(ry * 2 + pad * 2);
+  const octx = off.getContext('2d');
+  octx.translate(pad + rx - cx, pad + ry - cy);
+  octx.filter = 'contrast(1.14) saturate(0.92)';
+  octx.drawImage(photo.img, t.x, t.y, t.dw, t.dh);
+  octx.filter = 'none';
+
+  // the panel's grade, drawn with the panel's own world-space gradients so the cut-out matches it exactly
+  const bx0 = cx - rx - pad, by0 = cy - ry - pad;
+  const bw = 2 * rx + 2 * pad, bh = 2 * ry + 2 * pad;
+  const tone = octx.createLinearGradient(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h);
+  tone.addColorStop(0, pal.grade[0]);
+  tone.addColorStop(0.42, pal.grade[1]);
+  tone.addColorStop(0.78, pal.grade[2]);
+  tone.addColorStop(1, pal.grade[3]);
+  octx.globalCompositeOperation = 'color';
+  octx.globalAlpha = 0.82;
+  octx.fillStyle = tone;
+  octx.fillRect(bx0, by0, bw, bh);
+
+  const warm = octx.createLinearGradient(0, rect.y + rect.h * 0.35, 0, rect.y + rect.h);
+  warm.addColorStop(0, 'rgba(0,0,0,0)');
+  warm.addColorStop(1, hexAlpha(pal.accent2, 0.5));
+  octx.globalCompositeOperation = 'screen';
+  octx.globalAlpha = 0.7;
+  octx.fillStyle = warm;
+  octx.fillRect(bx0, by0, bw, bh);
+
+  const cool = octx.createLinearGradient(0, rect.y, 0, rect.y + rect.h * 0.6);
+  cool.addColorStop(0, hexAlpha(pal.grade[0], 0.55));
+  cool.addColorStop(1, 'rgba(0,0,0,0)');
+  octx.globalCompositeOperation = 'multiply';
+  octx.globalAlpha = 0.55;
+  octx.fillStyle = cool;
+  octx.fillRect(bx0, by0, bw, bh);
+
+  const light = octx.createRadialGradient(
+    rect.x + rect.w * 0.62, rect.y + rect.h * 0.42, 0,
+    rect.x + rect.w * 0.5, rect.y + rect.h * 0.5, Math.max(rect.w, rect.h) * 0.72);
+  light.addColorStop(0, 'rgba(255,240,210,0.22)');
+  light.addColorStop(0.6, 'rgba(0,0,0,0)');
+  light.addColorStop(1, 'rgba(0,0,0,0.5)');
+  octx.globalCompositeOperation = 'soft-light';
+  octx.globalAlpha = 1;
+  octx.fillStyle = light;
+  octx.fillRect(bx0, by0, bw, bh);
+
+  octx.save();
+  octx.globalAlpha = 0.06;
+  octx.globalCompositeOperation = 'overlay';
+  octx.fillStyle = octx.createPattern(dots, 'repeat');
+  octx.fillRect(bx0, by0, bw, bh);
+  octx.restore();
+  octx.save();
+  octx.globalAlpha = 0.08;
+  octx.fillStyle = pal.ink;
+  const step = Math.max(3, rect.h * 0.012);
+  for (let y = by0; y < by0 + bh; y += step) octx.fillRect(bx0, y, bw, Math.max(1, step * 0.28));
+  octx.restore();
+
+  const unify = octx.createLinearGradient(geo.area.x, geo.area.y, geo.area.x + geo.area.w, geo.area.y + geo.area.h);
+  unify.addColorStop(0, pal.grade[0]);
+  unify.addColorStop(0.45, pal.grade[1]);
+  unify.addColorStop(0.8, pal.grade[2]);
+  unify.addColorStop(1, pal.grade[3]);
+  octx.globalCompositeOperation = 'color';
+  octx.globalAlpha = 0.24;
+  octx.fillStyle = unify;
+  octx.fillRect(bx0, by0, bw, bh);
+
+  const wash2 = octx.createLinearGradient(0, geo.area.y, 0, geo.area.y + geo.area.h);
+  wash2.addColorStop(0, hexAlpha(pal.accent, 0.1));
+  wash2.addColorStop(0.55, hexAlpha(pal.accent2, 0.06));
+  wash2.addColorStop(1, hexAlpha(pal.accent2, 0.2));
+  octx.globalCompositeOperation = 'soft-light';
+  octx.globalAlpha = 1;
+  octx.fillStyle = wash2;
+  octx.fillRect(bx0, by0, bw, bh);
+
+  // soft elliptical matte: opaque around the head, gone at the rim
+  octx.setTransform(1, 0, 0, 1, 0, 0);
+  octx.globalCompositeOperation = 'destination-in';
+  octx.globalAlpha = 1;
+  octx.translate(pad + rx, pad + ry);
+  octx.scale(1, ry / rx);
+  const mask = octx.createRadialGradient(0, 0, rx * 0.5, 0, 0, rx);
+  mask.addColorStop(0, 'rgba(255,255,255,1)');
+  mask.addColorStop(0.72, 'rgba(255,255,255,1)');
+  mask.addColorStop(0.9, 'rgba(255,255,255,0.85)');
+  mask.addColorStop(1, 'rgba(255,255,255,0)');
+  octx.fillStyle = mask;
+  octx.beginPath();
+  octx.arc(0, 0, rx, 0, Math.PI * 2);
+  octx.fill();
+
+  ctx.save();
+  ctx.globalAlpha = 1;
+  ctx.drawImage(off, cx - rx - pad, cy - ry - pad);
+  ctx.restore();
+  ctx.restore();
+}
+
+function drawSeal(ctx, geo, state, pal, W, H) {
+  const r = Math.min(W, H) * 0.082;
+  let fx = 0.56, fy = 0.56;
+  if (state.layout === 'hero') { fx = 0.631; fy = 0.52; }
+  const cx = geo.area.x + geo.area.w * fx;
+  const cy = geo.area.y + geo.area.h * fy;
+
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.45)';
+  ctx.shadowBlur = r * 0.3;
+  ctx.shadowOffsetY = r * 0.08;
+  ctx.fillStyle = pal.cream;
+  const scallops = 42;
+  for (let i = 0; i < scallops; i++) {
+    const a = (i / scallops) * Math.PI * 2;
+    ctx.beginPath();
+    ctx.arc(cx + Math.cos(a) * r * 0.9, cy + Math.sin(a) * r * 0.9, r * 0.125, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.94, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  ctx.fillStyle = pal.accent;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.84, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.strokeStyle = pal.cream;
+  ctx.lineWidth = r * 0.018;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r * 0.7, 0, Math.PI * 2);
+  ctx.stroke();
+
+  drawArcText(ctx, 'PALM COAST', cx, cy, r * 0.62, -Math.PI * 0.76, -Math.PI * 0.24, r * 0.12, pal.cream);
+
+  // star
+  ctx.fillStyle = pal.cream;
+  ctx.beginPath();
+  for (let i = 0; i < 10; i++) {
+    const a = -Math.PI / 2 + (i * Math.PI) / 5;
+    const rad = i % 2 ? r * 0.09 : r * 0.21;
+    const px = cx + Math.cos(a) * rad;
+    const py = cy + Math.sin(a) * rad;
+    if (i === 0) ctx.moveTo(px, py);
+    else ctx.lineTo(px, py);
+  }
+  ctx.closePath();
+  ctx.fill();
+
+  const line = `FESTIVAL ${state.sealYear || 2026}`;
+  const fs = r * 0.1;
+  ctx.font = `900 ${fs}px ${FONT_FAMILY}`;
+  ctx.letterSpacing = `${fs * 0.08}px`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = pal.cream;
+  ctx.fillText(line, cx, cy + r * 0.47);
+  ctx.letterSpacing = '0px';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'alphabetic';
+}
+
+function drawArcText(ctx, text, cx, cy, radius, from, to, size, color) {
+  ctx.save();
+  ctx.fillStyle = color;
+  ctx.font = `900 ${size}px ${FONT_FAMILY}`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  const chars = Array.from(text);
+  const widths = chars.map((ch) => ctx.measureText(ch).width);
+  const total = widths.reduce((a, b) => a + b, 0) || 1;
+  let run = 0;
+  for (let i = 0; i < chars.length; i++) {
+    const mid = (run + widths[i] / 2) / total;
+    run += widths[i];
+    const a = from + (to - from) * mid;
+    ctx.save();
+    ctx.translate(cx + Math.cos(a) * radius, cy + Math.sin(a) * radius);
+    ctx.rotate(a + Math.PI / 2);
+    ctx.fillText(chars[i], 0, 0);
+    ctx.restore();
+  }
   ctx.restore();
 }
 

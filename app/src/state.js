@@ -5,11 +5,12 @@
 import { LAYOUTS } from './render.js';
 
 export const SAMPLES = [
-  { id: 'sunset-palms', name: 'Sunset Palms', url: 'samples/sunset-palms.jpg', label: 'SUNSET STRIP', crop: { cx: 0.5, cy: 0.62, zoom: 1.22 } },
-  { id: 'boulevard', name: 'Boulevard', url: 'samples/boulevard.jpg', label: 'GOLD COAST', crop: { cx: 0.52, cy: 0.24, zoom: 1.18 } },
-  { id: 'night-drive', name: 'Night Drive', url: 'samples/night-drive.jpg', label: 'NIGHT MOVES', crop: { cx: 0.5, cy: 0.55, zoom: 1.04 } },
-  { id: 'pier', name: 'The Pier', url: 'samples/pier.jpg', label: 'THE PIER', crop: { cx: 0.47, cy: 0.24, zoom: 1.26 } },
-  { id: 'poolside', name: 'Poolside', url: 'samples/poolside.jpg', label: 'LOW TIDE', crop: { cx: 0.42, cy: 0.55, zoom: 1.1 } },
+  { id: 'gold-hour', name: 'Gold Hour', url: 'samples/gold-hour.jpg', label: 'GOLD HOUR', crop: { cx: 0.5, cy: 0.58, zoom: 1 }, face: { fx: 0.47, fy: 0.34 } },
+  { id: 'palm-line', name: 'Palm Line', url: 'samples/palm-line.jpg', label: 'PALM LINE', crop: { cx: 0.44, cy: 0.3, zoom: 1.04 }, face: { fx: 0.36, fy: 0.3 } },
+  { id: 'the-car', name: 'The Car', url: 'samples/the-car.jpg', label: 'THE CAR', crop: { cx: 0.5, cy: 0.52, zoom: 1.04 } },
+  { id: 'pier', name: 'The Pier', url: 'samples/pier.jpg', label: 'THE PIER', crop: { cx: 0.45, cy: 0.7, zoom: 1.12 }, face: { fx: 0.4, fy: 0.3 } },
+  { id: 'low-tide', name: 'Low Tide', url: 'samples/low-tide.jpg', label: 'LOW TIDE', crop: { cx: 0.5, cy: 0.5, zoom: 1.04 } },
+  { id: 'the-rod', name: 'The Rod', url: 'samples/the-rod.jpg', label: 'THE ROD', crop: { cx: 0.44, cy: 0.34, zoom: 1.06 }, face: { fx: 0.4, fy: 0.3 } },
 ];
 
 export const DEFAULTS = {
@@ -75,6 +76,7 @@ function applyDefaultCrop(panel, photo) {
     panel.zoom = photo.crop.zoom;
   }
   if (photo.label) panel.label = photo.label;
+  panel.face = photo.face || null;
 }
 
 export function assignPhoto(state, photoId, all) {
