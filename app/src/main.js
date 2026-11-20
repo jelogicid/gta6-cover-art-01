@@ -1,51 +1,40 @@
-// Wires the page: pick a photo, type a caption, export the square cover as a PNG. A `?shot=` query sets up a fixed
-// scene for a screenshot instead (./shots.js).
-import { drawCover } from './cover.js';
-import { runShot } from './shots.js';
+// Entry point for the page. A `?shot=` query opens a fixed screenshot scene instead of the normal studio; otherwise
+// the studio boots with the sample photos already in the pool, so the poster is never blank.
 
-const canvas = document.getElementById('cover');
-const caption = document.getElementById('caption');
-const status = document.getElementById('status');
-let photo = null;
+import { createState, loadSamplePhotos, addPhotos, syncPanels } from './state.js';
+import { createStudio } from './studio.js';
+import { runCoverShot, runEditorShot } from './shots.js';
 
-function redraw() {
-  drawCover(canvas, photo, caption.value);
+const query = new URLSearchParams(location.search);
+const shot = query.get('shot');
+
+async function boot() {
+  if (shot === 'cover') {
+    await runCoverShot(query);
+    return;
+  }
+  if (shot === 'editor') {
+    await runEditorShot(query);
+    return;
+  }
+
+  const state = createState();
+  try {
+    const samples = await loadSamplePhotos();
+    addPhotos(state, samples);
+  } catch (err) {
+    console.error('sample photos did not load', err);
+  }
+  syncPanels(state);
+  const studio = await createStudio(state);
+  window.__studio = studio;
 }
 
-/** Loads an image from a URL, resolving to the image once it can be drawn. */
-export function loadImage(url) {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = url;
-  });
-}
-
-document.getElementById('photo').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  photo = await loadImage(URL.createObjectURL(file));
-  redraw();
+boot().catch((err) => {
+  const status = document.getElementById('status');
+  if (status) {
+    status.textContent = `Studio failed to start: ${err.message}`;
+    status.className = 'err';
+  }
+  console.error(err);
 });
-caption.addEventListener('input', redraw);
-document.getElementById('export').addEventListener('click', () => {
-  canvas.toBlob((blob) => {
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'cover-1080x1080.png';
-    a.click();
-    status.textContent = 'Saved cover-1080x1080.png';
-  }, 'image/png');
-});
-
-const shot = new URLSearchParams(location.search).get('shot');
-if (shot) {
-  runShot(shot, new URLSearchParams(location.search), async (sample, text) => {
-    photo = await loadImage(sample);
-    caption.value = text;
-    redraw();
-  });
-} else {
-  redraw();
-}

@@ -3,21 +3,97 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Cover Snap</title>
-<link rel="stylesheet" href="./style.css">
+<title>Palm Coast Cover Lab — multi-panel cover art</title>
+<link rel="icon" href="data:,">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-<main class="app">
-  <section class="controls">
-    <h1>Cover Snap</h1>
-    <p>A photo and a caption, made into a square cover.</p>
-    <label>Photo <input id="photo" type="file" accept="image/*"></label>
-    <label>Caption <input id="caption" type="text" maxlength="40" value="Sunset Heist"></label>
-    <button id="export" type="button">Export PNG 1080 x 1080</button>
-    <p id="status" role="status"></p>
-  </section>
-  <canvas id="cover" width="1080" height="1080" aria-label="The cover"></canvas>
-</main>
+<div class="studio" id="studio">
+  <aside class="rail">
+    <header class="brand">
+      <span class="mark" aria-hidden="true">PC</span>
+      <div>
+        <h1>Palm Coast</h1>
+        <p>Cover Lab · multi-panel poster maker</p>
+      </div>
+    </header>
+
+    <div class="scroll">
+      <section class="block">
+        <div class="block-head"><h2>Lettering</h2><span class="tag">caps only</span></div>
+        <label class="field">
+          <span>Title <b id="title-count">0/26</b></span>
+          <input id="title" type="text" maxlength="26" value="Sunset Heist" autocomplete="off" spellcheck="false">
+        </label>
+        <label class="field">
+          <span>Caption <b id="caption-count">0/44</b></span>
+          <input id="caption" type="text" maxlength="44" value="Palm Coast Never Sleeps" autocomplete="off" spellcheck="false">
+        </label>
+      </section>
+
+      <section class="block">
+        <div class="block-head"><h2>Panel layout</h2><span class="tag" id="panel-count"></span></div>
+        <div class="chips" id="layouts"></div>
+      </section>
+
+      <section class="block">
+        <div class="block-head"><h2>Colour grade</h2><span class="tag">duotone</span></div>
+        <div class="swatches" id="palettes"></div>
+      </section>
+
+      <section class="block">
+        <div class="block-head"><h2>Photos</h2><span class="tag" id="photo-count"></span></div>
+        <div class="pool" id="pool"></div>
+        <div class="row">
+          <button class="btn" id="add-photos" type="button">Add photos</button>
+          <span class="hint">or drop files on the poster</span>
+        </div>
+        <input id="file" type="file" accept="image/*" multiple hidden>
+      </section>
+
+      <section class="block">
+        <div class="block-head"><h2>Panel <b id="panel-no">01</b></h2><span class="tag" id="panel-photo"></span></div>
+        <div class="row">
+          <button class="btn" id="all-panels" type="button">Use for all panels</button>
+          <button class="btn" id="reset-panel" type="button">Reset crop</button>
+        </div>
+        <label class="field zoom">
+          <span>Zoom <b id="zoom-val">1.00</b></span>
+          <input id="zoom" type="range" min="1" max="2.4" step="0.01" value="1">
+        </label>
+        <p class="hint">Drag the poster to pan the selected panel · scroll to zoom · arrow keys nudge</p>
+      </section>
+    </div>
+
+    <footer class="railfoot">
+      <div class="row">
+        <button class="btn" id="undo" type="button">Undo</button>
+        <button class="btn" id="redo" type="button">Redo</button>
+        <span class="hint keys">Z / SHIFT+Z</span>
+      </div>
+      <div class="exports" id="exports">
+        <button class="btn export" type="button" data-size="square">Export <b>1080 × 1080</b></button>
+        <button class="btn export" type="button" data-size="portrait">Export <b>1080 × 1350</b></button>
+        <button class="btn export cta" type="button" data-size="wide">Export <b>1920 × 1080</b></button>
+      </div>
+    </footer>
+  </aside>
+
+  <main class="stage">
+    <div class="stagebar">
+      <div class="sizes" id="sizes" role="group" aria-label="Post size"></div>
+      <div class="stagehint"><b>1–5</b> layouts · <b>6–9</b> grades · <b>Z</b> undo · <b>E</b> export</div>
+    </div>
+    <div class="canvas-hold" id="drop">
+      <canvas id="preview" width="1200" height="675" aria-label="Live cover preview"></canvas>
+      <div class="dropmask" id="dropmask">Drop photos to add them</div>
+    </div>
+    <div class="statusbar">
+      <span id="status" role="status">Starting the studio…</span>
+      <span id="meta" class="meta"></span>
+    </div>
+  </main>
+</div>
 <script type="module" src="./src/main.js"></script>
 </body>
 </html>
