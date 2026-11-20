@@ -87,7 +87,7 @@ export function panelRects(state, W, H) {
   const isPortrait = W / H < 0.92;
   const m = Math.min(W, H) * (isWide ? 0.028 : isPortrait ? 0.045 : 0.038);
   const headerH = H * (isWide ? 0.285 : isPortrait ? 0.175 : 0.225);
-  const footerH = H * (isWide ? 0.125 : isPortrait ? 0.09 : 0.1);
+  const footerH = H * (isWide ? 0.185 : isPortrait ? 0.115 : 0.135);
   const top = m * 0.75 + headerH + m * 0.85;
   const bottom = H - m * 1.1 - footerH - m * 0.62;
   const area = { x: m, y: top, w: W - 2 * m, h: Math.max(H * 0.25, bottom - top) };
@@ -142,7 +142,7 @@ export function drawCover(canvas, state, opts = {}) {
   const layout = LAYOUTS[state.layout] || LAYOUTS.quad;
   const geo = panelRects(state, W, H);
   const headerH = H * (isWide ? 0.285 : isPortrait ? 0.175 : 0.225);
-  const footerH = H * (isWide ? 0.125 : isPortrait ? 0.09 : 0.1);
+  const footerH = H * (isWide ? 0.185 : isPortrait ? 0.115 : 0.135);
   const header = { x: m, y: m * 0.75, w: W - 2 * m, h: headerH };
   const footer = { x: m, y: H - m * 1.1 - footerH, w: W - 2 * m, h: footerH };
 
@@ -181,9 +181,9 @@ export function drawCover(canvas, state, opts = {}) {
     }
   }
 
-  drawHeader(ctx, header, state, pal, isWide);
+  const titleSize = drawHeader(ctx, header, state, pal, isWide);
   drawHeroBust(ctx, geo, state, pal);
-  drawFooter(ctx, footer, state, pal, isWide);
+  drawFooter(ctx, footer, state, pal, isWide, titleSize);
   filmGrain(ctx, W, H, state.seed || 7);
 
   // edge vignette ties the whole sheet together
@@ -554,6 +554,9 @@ function drawHeader(ctx, header, state, pal, isWide) {
   ctx.globalAlpha = 0.5;
   ctx.fillRect(header.x + header.w * 0.34 + header.h * 0.02, barY + barH * 0.35, header.w * 0.66 - header.h * 0.02, Math.max(1, barH * 0.22));
   ctx.globalAlpha = 1;
+
+  // the wordmark's cap height, so the footer caption can be set against it rather than against the sheet
+  return { size: fit.size, barY };
 }
 
 function fitTitle(ctx, text, maxW, availH, isWide) {
@@ -608,76 +611,187 @@ function drawBigText(ctx, text, x, baseline, size, pal) {
   ctx.restore();
 }
 
-function drawFooter(ctx, footer, state, pal, isWide) {
+/**
+ * The lettering's own numbers, so a build script can hold the hierarchy to a ratio rather than to an impression:
+ * the wordmark's fitted size and the footer caption's size as a share of it. Both are recomputed with the same
+ * font and the same width budget the renderer uses.
+ */
+export function footerMetrics(state, W, H) {
+  const isWide = W / H > 1.4;
+  const isPortrait = W / H < 0.92;
+  const m = Math.min(W, H) * (isWide ? 0.028 : isPortrait ? 0.045 : 0.038);
+  const headerH = H * (isWide ? 0.285 : isPortrait ? 0.175 : 0.225);
+  const footerH = H * (isWide ? 0.185 : isPortrait ? 0.115 : 0.135);
+  const header = { x: m, y: m * 0.75, w: W - 2 * m, h: headerH };
+  const footer = { x: m, y: H - m * 1.1 - footerH, w: W - 2 * m, h: footerH };
+
+  const title = (state.title || 'UNTITLED').toUpperCase();
+  const kickerSize = Math.max(10, header.h * 0.078);
+  const pad = header.h * 0.018;
+  const barH = header.h * 0.026;
+  const barY = header.y + header.h - barH;
+  const availH = barY - (header.y + pad + kickerSize * 2.1) - header.h * 0.02;
+
+  const c = document.createElement('canvas').getContext('2d');
+  c.font = `900 100px ${FONT_FAMILY}`;
+  const fit = fitTitle(c, title, header.w, availH, isWide);
+
   const caption = (state.caption || '').toUpperCase();
-  const rightW = footer.w * (isWide ? 0.3 : 0.36);
-  const rx = footer.x + footer.w - rightW;
+  const creditsW = footer.w * (isWide ? 0.26 : 0.3);
+  const c2 = document.createElement('canvas').getContext('2d');
+  const led = captionLayout(c2, caption, footer.w * 0.96, fit.size, footer.h);
+  return {
+    titleSize: fit.size, titleLines: fit.lines.length,
+    captionSize: led.size, captionLines: led.lines.length, ratio: led.size / fit.size,
+    footerH, creditsW,
+  };
+}
+
+/**
+ * The footer caption's size, tracking and lines: tracked caps at about a third of the wordmark's cap height, on a
+ * row of its own above the credits. The legal line gets a reserved row at the bottom, so a two-line caption is
+ * sized to what is actually left rather than being allowed to run into the fine print. Used by the renderer and by
+ * the metrics the build scripts check, so the two cannot disagree.
+ */
+function captionLayout(ctx, caption, room, titleSize, footerH) {
+  if (!caption) return { size: 0, tracking: 0.14, lines: [] };
+  const legalRow = Math.max(11, footerH * 0.17);
+  const padTop = footerH * 0.13;
+  const blockH = Math.max(footerH * 0.3, footerH - legalRow - padTop);
+  const target = Math.min(titleSize / 3, blockH / 1.16, footerH * 0.42);
+
+  // Tracking is decoration, size is hierarchy: tighten the tracking to hold one line before giving up any height.
+  for (const tracking of [0.14, 0.1, 0.06, 0.03]) {
+    const lines = wrapCaption(ctx, caption, room, target, 99, tracking);
+    if (lines.length === 1) return { size: target, tracking, lines, legalRow };
+  }
+  // One line is the point of a caption, so a long one is set a little smaller rather than broken in two — as long
+  // as it still reads as a caption and not as a second headline.
+  const full = measureTracked(ctx, caption, target, 0.03);
+  const fit = target * (room / full);
+  if (fit >= target * 0.62) {
+    // the measure and the wrapper must agree, so trust the wrapper: shave until it reports one line
+    let size = fit;
+    for (let i = 0; i < 12; i++) {
+      if (wrapCaption(ctx, caption, room, size, 99, 0.03).length === 1) break;
+      size *= 0.985;
+    }
+    return { size, tracking: 0.03, lines: wrapCaption(ctx, caption, room, size, 99, 0.03), legalRow };
+  }
+  // It genuinely needs two lines: size it to the row it has, so both lines and the legal row fit.
+  const size = Math.min(target, blockH / 2.16);
+  return { size, tracking: 0.03, lines: wrapCaption(ctx, caption, room, size, 2, 0.03), legalRow };
+}
+
+function measureTracked(ctx, text, size, tracking = 0.14) {
+  ctx.save();
+  ctx.font = `700 ${size}px ${FONT_FAMILY}`;
+  ctx.letterSpacing = `${size * tracking}px`;
+  const w = ctx.measureText(text).width + size * tracking * text.length;
+  ctx.restore();
+  return w;
+}
+
+function drawFooter(ctx, footer, state, pal, isWide, title) {
+  const caption = (state.caption || '').toUpperCase();
+  const titleCap = (title && title.size) || footer.h * 1.1;
+  const rightW = footer.w * (isWide ? 0.26 : 0.3);
   const ruleY = footer.y;
   ctx.fillStyle = hexAlpha(pal.cream, 0.65);
   ctx.fillRect(footer.x, ruleY, footer.w, Math.max(1, footer.h * 0.012));
   ctx.fillStyle = pal.accent;
   ctx.fillRect(footer.x, ruleY, footer.w * 0.18, Math.max(2, footer.h * 0.03));
 
-  if (caption) {
-    const maxW = footer.w * (isWide ? 0.5 : 0.48);
-    const size = Math.min(footer.h * 0.5, fitSize(ctx, caption, maxW, footer.h * 0.5).size);
-    ctx.save();
-    ctx.font = `900 ${size}px ${FONT_FAMILY}`;
-    ctx.letterSpacing = `${size * 0.16}px`;
-    ctx.translate(footer.x, footer.y + footer.h * 0.58);
-    ctx.scale(CONDENSE, 1);
-    ctx.fillStyle = hexAlpha(pal.cream, 0.92);
-    ctx.fillText(caption, 0, 0);
-    ctx.restore();
+  // The caption is a caption line above the credits now, not a band of its own: tracked caps at about a third of
+  // the wordmark's CAP height, on its own row across the sheet, so nothing squeezes it below that.
+  const blockTop = footer.y + footer.h * 0.13;
+  const led = captionLayout(ctx, caption, footer.w * 0.96, titleCap, footer.h);
+  const capSize = led.size;
+  const lines = led.lines;
+  const lineH = capSize * 1.16;
+  ctx.save();
+  ctx.font = `700 ${capSize}px ${FONT_FAMILY}`;
+  ctx.letterSpacing = `${capSize * led.tracking}px`;
+  ctx.fillStyle = hexAlpha(pal.cream, 0.84);
+  for (let i = 0; i < lines.length; i++) {
+    ctx.fillText(lines[i], footer.x, blockTop + capSize * 0.78 + i * lineH);
   }
-
-  // fine print, the legal shirttail every cover carries; shrunk to fit beside the credit column
-  const legal = 'A COAST PICTURE  ·  ALL PERSONS AND PLACES FICTIONAL';
-  const legalRoom = footer.w - rightW - footer.h * 0.35;
-  let fine = Math.max(8, footer.h * 0.115);
-  ctx.font = `900 ${fine}px ${FONT_FAMILY}`;
-  ctx.letterSpacing = `${fine * 0.08}px`;
-  const legalW = ctx.measureText(legal).width + fine * 0.08 * legal.length;
-  if (legalW > legalRoom) {
-    fine *= legalRoom / legalW;
-    ctx.font = `900 ${fine}px ${FONT_FAMILY}`;
-    ctx.letterSpacing = `${fine * 0.08}px`;
-  }
-  ctx.fillStyle = hexAlpha(pal.cream, 0.78);
-  ctx.fillText(legal, footer.x, footer.y + footer.h * 0.94);
+  ctx.restore();
   ctx.letterSpacing = '0px';
 
-  // credits block on the right, sized to fit its column
-  let fs = Math.max(9, footer.h * 0.16);
+  // bottom row: the legal shirttail on the left, the credits and the barcode on the right
+  const legal = 'A COAST PICTURE  ·  ALL PERSONS AND PLACES FICTIONAL  ·  ISSUE 01';
+  const creditsW = footer.w * (isWide ? 0.26 : 0.3);
+  const legalRoom = footer.w - creditsW - footer.h * 0.3;
+  let fine = Math.max(7, footer.h * 0.085);
+  ctx.font = `700 ${fine}px ${FONT_FAMILY}`;
+  ctx.letterSpacing = `${fine * 0.1}px`;
+  const legalW = ctx.measureText(legal).width + fine * 0.1 * legal.length;
+  if (legalW > legalRoom) {
+    fine *= legalRoom / legalW;
+    ctx.font = `700 ${fine}px ${FONT_FAMILY}`;
+    ctx.letterSpacing = `${fine * 0.1}px`;
+  }
+  const legalY = footer.y + footer.h - Math.max(3, led.legalRow * 0.32);
+  ctx.fillStyle = hexAlpha(pal.cream, 0.46);
+  ctx.fillText(legal, footer.x, legalY);
+  ctx.letterSpacing = '0px';
+
+  // credits block on the right, on the bottom row, sized to fit its column
+  let fs = Math.max(8, footer.h * 0.105);
   ctx.letterSpacing = `${fs * 0.14}px`;
   ctx.font = `900 ${fs}px ${FONT_FAMILY}`;
   const topLine = 'COAST STUDIO';
   const measured = ctx.measureText(topLine).width + fs * 0.14 * topLine.length;
-  if (measured > rightW) fs *= rightW / measured;
+  if (measured > creditsW * 0.62) fs *= (creditsW * 0.62) / measured;
   ctx.textAlign = 'right';
   ctx.font = `900 ${fs}px ${FONT_FAMILY}`;
   ctx.letterSpacing = `${fs * 0.14}px`;
   ctx.fillStyle = pal.accent2;
-  ctx.fillText(topLine, footer.x + footer.w, footer.y + footer.h * 0.4);
-  ctx.fillStyle = hexAlpha(pal.cream, 0.88);
+  ctx.fillText(topLine, footer.x + footer.w, legalY - fs * 1.25);
+  ctx.fillStyle = hexAlpha(pal.cream, 0.7);
   ctx.letterSpacing = `${fs * 0.1}px`;
-  ctx.fillText('CUT ON A SUNSET / MMXXVI', footer.x + footer.w, footer.y + footer.h * 0.58);
+  ctx.fillText('CUT ON A SUNSET / MMXXVI', footer.x + footer.w, legalY);
   ctx.letterSpacing = '0px';
   ctx.textAlign = 'left';
 
-  // barcode: a print mark, not a scannable code
-  const bars = 26;
-  const bw = rightW * 0.44;
-  const bx = footer.x + footer.w - bw;
-  const by = footer.y + footer.h * 0.64;
-  const bh = footer.h * 0.17;
+  // barcode: a print mark, not a scannable code, tucked left of the credits
+  const bars = 20;
+  const bw = creditsW * 0.2;
+  const bx = footer.x + footer.w - creditsW * 1.02 - bw;
+  const bh = Math.max(6, footer.h * 0.13);
+  const by = legalY - bh;
   for (let i = 0; i < bars; i++) {
     const w = bw / bars;
-    ctx.globalAlpha = i % 3 === 0 ? 0.95 : 0.6;
+    ctx.globalAlpha = i % 3 === 0 ? 0.8 : 0.4;
     ctx.fillStyle = pal.cream;
     ctx.fillRect(bx + i * w, by, w * (i % 4 === 0 ? 0.75 : 0.45), bh);
   }
   ctx.globalAlpha = 1;
+}
+
+/** Wraps a caption into at most `max` lines at a given size, so a long one keeps its size instead of shrinking. */
+function wrapCaption(ctx, text, maxW, size, max, tracking = 0.14) {
+  ctx.save();
+  ctx.font = `700 ${size}px ${FONT_FAMILY}`;
+  ctx.letterSpacing = `${size * tracking}px`;
+  const words = text.split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    const w = ctx.measureText(next).width + size * tracking * next.length;
+    if (line && w > maxW && lines.length + 1 < max) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  ctx.letterSpacing = '0px';
+  ctx.restore();
+  return lines;
 }
 
 function drawSelection(ctx, rect, index, pal) {
@@ -721,6 +835,31 @@ function drawSelection(ctx, rect, index, pal) {
   ctx.restore();
 }
 
+/**
+ * Where the hero cut-out sits on the sheet and how big its silhouette is: the same numbers drawHeroBust uses, so a
+ * build script can measure the rim and the shadow on the pixels they were painted into.
+ */
+export function heroBustBox(state, W, H) {
+  if (!state || state.layout !== 'hero') return null;
+  const geo = panelRects(state, W, H);
+  if (!geo.panels.length) return null;
+  const panel = state.panels[0] || {};
+  const photo = state.photos && state.photos.find((p) => p.id === panel.photo);
+  if (!photo || !photo.img || !photo.img.naturalWidth || !photo.face) return null;
+  const rect = geo.panels[0];
+  const t = photoTransform(photo.img, rect, panel);
+  const face = photo.face;
+  const head = photo.head || face;
+  const faceX = t.x + (face.x + face.w / 2) * t.dw;
+  const faceY = t.y + (face.y + face.h * 0.44) * t.dh;
+  const rx = clamp(head.w * t.dw * 0.62, rect.w * 0.10, rect.w * 0.22);
+  const ry = clamp(head.h * t.dh * 0.62, rect.h * 0.16, rect.h * 0.44);
+  return {
+    cx: clamp(faceX, rect.x + rx * 0.6, rect.x + rect.w - rx * 0.6),
+    cy: faceY, rx, ry, rect,
+  };
+}
+
 function drawHeroBust(ctx, geo, state, pal) {
   if (geo.tilt || state.layout !== 'hero' || !geo.panels.length) return;
   const panel = state.panels[0] || {};
@@ -735,17 +874,16 @@ function drawHeroBust(ctx, geo, state, pal) {
   ctx.clip();
 
   const t = photoTransform(photo.img, rect, panel);
-  const faceX = t.x + photo.face.fx * t.dw;
-  const faceY = t.y + photo.face.fy * t.dh;
-  const rx = Math.min(rect.w * 0.17, t.dw * 0.17);
-  const ry = Math.min(rect.h * 0.4, t.dh * 0.4);
-  const cx = clamp(faceX, rect.x + rx * 0.6, rect.x + rect.w - rx * 0.6);
-  const cy = faceY;
-  const pad = Math.ceil(Math.max(rx, ry) * 0.04);
+  const box = heroBustBox(state, ctx.canvas.width, ctx.canvas.height);
+  const rx = box.rx, ry = box.ry;
+  const cx = box.cx, cy = box.cy;
+  const pad = Math.ceil(Math.max(rx, ry) * 0.06);
 
+  const cw = Math.ceil(rx * 2 + pad * 2);
+  const ch = Math.ceil(ry * 2 + pad * 2);
   const off = document.createElement('canvas');
-  off.width = Math.ceil(rx * 2 + pad * 2);
-  off.height = Math.ceil(ry * 2 + pad * 2);
+  off.width = cw;
+  off.height = ch;
   const octx = off.getContext('2d');
   octx.translate(pad + rx - cx, pad + ry - cy);
   octx.filter = 'contrast(1.14) saturate(0.92)';
@@ -824,33 +962,87 @@ function drawHeroBust(ctx, geo, state, pal) {
   octx.fillStyle = wash2;
   octx.fillRect(bx0, by0, bw, bh);
 
-  // soft elliptical matte: opaque around the head, gone at the rim
+  // the silhouette, as its own canvas: an elliptical matte feathered just enough to hide its diameter
+  const matte = document.createElement('canvas');
+  matte.width = cw;
+  matte.height = ch;
+  const mctx = matte.getContext('2d');
+  mctx.save();
+  mctx.translate(pad + rx, pad + ry);
+  mctx.scale(1, ry / rx);
+  const mask = mctx.createRadialGradient(0, 0, rx * 0.55, 0, 0, rx);
+  mask.addColorStop(0, 'rgba(255,255,255,1)');
+  mask.addColorStop(0.965, 'rgba(255,255,255,1)');
+  // a crisp rim, only a few pixels of feather: the cut edge is the thing the rim light and shadow hang on
+  mask.addColorStop(1, 'rgba(255,255,255,0)');
+  mctx.fillStyle = mask;
+  mctx.beginPath();
+  mctx.arc(0, 0, rx, 0, Math.PI * 2);
+  mctx.fill();
+  mctx.restore();
+
   octx.setTransform(1, 0, 0, 1, 0, 0);
   octx.globalCompositeOperation = 'destination-in';
   octx.globalAlpha = 1;
-  octx.translate(pad + rx, pad + ry);
-  octx.scale(1, ry / rx);
-  const mask = octx.createRadialGradient(0, 0, rx * 0.5, 0, 0, rx);
-  mask.addColorStop(0, 'rgba(255,255,255,1)');
-  mask.addColorStop(0.72, 'rgba(255,255,255,1)');
-  mask.addColorStop(0.9, 'rgba(255,255,255,0.85)');
-  mask.addColorStop(1, 'rgba(255,255,255,0)');
-  octx.fillStyle = mask;
-  octx.beginPath();
-  octx.arc(0, 0, rx, 0, Math.PI * 2);
-  octx.fill();
+  octx.drawImage(matte, 0, 0);
 
+  // a soft dark cast shadow, thrown down and to the right, so the bust sits in front of the band
+  const sh = document.createElement('canvas');
+  sh.width = cw;
+  sh.height = ch;
+  const sctx = sh.getContext('2d');
+  const offX = Math.max(3, rx * 0.11);
+  const offY = Math.max(3, ry * 0.10);
+  sctx.filter = `blur(${Math.max(2, rx * 0.045)}px)`;
+  sctx.globalAlpha = 0.9;
+  sctx.drawImage(matte, offX, offY);
+  sctx.filter = 'none';
+  sctx.globalAlpha = 1;
+  sctx.globalCompositeOperation = 'source-in';
+  sctx.fillStyle = '#080208';
+  sctx.fillRect(0, 0, cw, ch);
+
+  // the rim: the matte minus a copy of itself shifted down-right, so what is left hugs the top-left edge
+  const rim = document.createElement('canvas');
+  rim.width = cw;
+  rim.height = ch;
+  const rctx = rim.getContext('2d');
+  const px = Math.max(2.5, ctx.canvas.width * 0.0018);
+  rctx.drawImage(matte, 0, 0);
+  rctx.globalCompositeOperation = 'destination-out';
+  rctx.drawImage(matte, px, px * 0.85);
+  rctx.globalCompositeOperation = 'source-in';
+  rctx.fillStyle = '#fff6e8';
+  rctx.fillRect(0, 0, cw, ch);
+  // keep the light on the sunlit side only: strong at the top-left, gone by the lower-right
+  rctx.globalCompositeOperation = 'destination-in';
+  const fall = rctx.createLinearGradient(0, 0, cw * 0.85, ch * 0.95);
+  fall.addColorStop(0, 'rgba(255,255,255,1)');
+  fall.addColorStop(0.55, 'rgba(255,255,255,0.55)');
+  fall.addColorStop(1, 'rgba(255,255,255,0)');
+  rctx.fillStyle = fall;
+  rctx.fillRect(0, 0, cw, ch);
+
+  const ox = cx - rx - pad, oy = cy - ry - pad;
   ctx.save();
   ctx.globalAlpha = 1;
-  ctx.drawImage(off, cx - rx - pad, cy - ry - pad);
+  ctx.drawImage(sh, ox, oy);
+  ctx.drawImage(off, ox, oy);
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = 0.9;
+  ctx.drawImage(rim, ox, oy);
   ctx.restore();
   ctx.restore();
 }
 
 function drawSeal(ctx, geo, state, pal, W, H) {
   const r = Math.min(W, H) * 0.082;
-  let fx = 0.56, fy = 0.56;
-  if (state.layout === 'hero') { fx = 0.631; fy = 0.52; }
+  let fx = 0.5, fy = 0.5;
+  // The seal is a sticker on the grid, never on a subject: on the hero sheet it sits on the hero's lower-right
+  // corner, on the six-up sheet on the central gutter where it covers four empty corners rather than a panel's
+  // subject. On the four-up sheet the centre is the only seam that has room for it.
+  if (state.layout === 'hero') { fx = 0.575; fy = 0.925; }
+  if (state.layout === 'six') { fx = 0.5; fy = 0.5; }
   const cx = geo.area.x + geo.area.w * fx;
   const cy = geo.area.y + geo.area.h * fy;
 

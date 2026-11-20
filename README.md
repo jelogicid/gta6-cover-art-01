@@ -20,8 +20,15 @@ function that paints the preview.
 
 - **Panels.** Five layouts — four-up, six-up, nine-up, hero-and-three, tilted snapshots — with a photo per panel or one
   photo across all of them. Click a panel, drag to pan, scroll to zoom; the crop is clamped so no panel letterboxes.
+- **Framing.** Every sample photo carries the boxes of what is in it (face, whole head, whole object) and each layout
+  carries hand-picked `cx`, `cy` and `zoom` per panel per post size, so a panel opens on a shot you can name in a
+  second rather than on a centroid that lands on texture. Switch layout or post size and the panels still on a preset
+  reframe themselves; a panel you have dragged or zoomed is left alone. No panel edge crosses a face by more than 4%
+  of the panel's side: a frame either holds a face whole or keeps it out of the picture.
 - **Covers.** A header band with a fitted condensed caps title, a numbered panel grid with lettering plates, and a
-  footer with the caption, studio credit, barcode and legal shirttail.
+  footer that sets the caption as a tracked line at about a third of the wordmark's cap height above the credits and
+  the legal shirttail — a caption, not a second headline. In the hero layout the bust is cut out and drawn in front of
+  the wordmark with a thin warm rim on its top-left edge and a soft cast shadow below it.
 - **Grades.** Four duotone grades (Vice Sunset, Neon Night, Gold Coast, Tidal Teal) applied per panel under a unifying
   wash, with a halftone screen, scanlines, grain and a vignette.
 - **Editing.** Title and caption with length caps, per-panel reset, undo/redo, drag-and-drop photos, keyboard shortcuts

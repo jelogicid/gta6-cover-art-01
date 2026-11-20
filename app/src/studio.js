@@ -5,8 +5,8 @@ import {
   drawCover, panelRects, loadCoverFont, PALETTES, LAYOUTS, SIZES, PANEL_WORDS,
 } from './render.js';
 import {
-  createState, syncPanels, addPhotos, assignPhoto, resetPanel, loadSamplePhotos, photosFromFiles,
-  createHistory, snapshot, restore,
+  createState, syncPanels, reframePanels, addPhotos, assignPhoto, resetPanel, loadSamplePhotos,
+  photosFromFiles, createHistory, snapshot, restore,
 } from './state.js';
 
 const PREVIEW_LONG = 1200;
@@ -170,6 +170,7 @@ export async function createStudio(state) {
     b.textContent = size.tag;
     b.addEventListener('click', () => {
       state.size = key;
+      reframePanels(state);
       setStatus(`Post size: ${size.tag}`);
       schedule();
     });
@@ -205,6 +206,7 @@ export async function createStudio(state) {
     if (!LAYOUTS[key]) return;
     state.layout = key;
     syncPanels(state);
+    reframePanels(state);
     history.commit();
     setStatus(`${LAYOUTS[key].label}: ${LAYOUTS[key].cells.length} panels`, 'ok');
     schedule();
@@ -227,6 +229,7 @@ export async function createStudio(state) {
     const panel = state.panels[state.selected];
     if (!panel) return;
     panel.zoom = Number(ui.zoom.value);
+    panel.auto = false;
     schedule();
   });
   ui.zoom.addEventListener('change', () => history.commit());
@@ -338,6 +341,7 @@ export async function createStudio(state) {
       const dh = photo.img.naturalHeight * scale;
       panel.cx = clamp(panel.cx - (pt.x - drag.lastX) / dw, rect.w / (2 * dw), 1 - rect.w / (2 * dw));
       panel.cy = clamp(panel.cy - (pt.y - drag.lastY) / dh, rect.h / (2 * dh), 1 - rect.h / (2 * dh));
+      panel.auto = false;
       drag.moved = true;
     }
     drag.lastX = pt.x;
@@ -362,6 +366,7 @@ export async function createStudio(state) {
     const panel = state.panels[index];
     if (!panel) return;
     panel.zoom = clamp((panel.zoom || 1) * Math.exp(-e.deltaY * 0.0016), 1, 2.4);
+    panel.auto = false;
     schedule();
     clearTimeout(canvas._zoomCommit);
     canvas._zoomCommit = setTimeout(() => history.commit(), 260);
@@ -480,6 +485,7 @@ export async function createStudio(state) {
       if (k === 'arrowright') panel.cx += step;
       if (k === 'arrowup') panel.cy -= step;
       if (k === 'arrowdown') panel.cy += step;
+      panel.auto = false;
       schedule();
       clearTimeout(canvas._keyCommit);
       canvas._keyCommit = setTimeout(() => history.commit(), 300);
@@ -514,6 +520,7 @@ export async function createStudio(state) {
       ui.title.value = state.title;
       ui.caption.value = state.caption;
       syncPanels(state);
+      reframePanels(state);
       renderPool();
       history.reset();
       render();
@@ -530,7 +537,7 @@ export async function createStudio(state) {
     syncPanels: () => { syncPanels(state); render(); },
     snapshot: () => snapshot(state),
     restore: (json) => { restore(state, json); schedule(); },
-    reload: () => { syncPanels(state); render(); },
+    reload: () => { syncPanels(state); reframePanels(state); render(); },
     panelWords: PANEL_WORDS,
   };
   return api;

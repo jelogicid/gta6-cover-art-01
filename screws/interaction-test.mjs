@@ -71,10 +71,16 @@ out.undoTitle = await page.inputValue('#title');
 await page.click('#redo');
 out.redoTitle = await page.inputValue('#title');
 
-// upload a local photo
-await page.setInputFiles('#file', new URL('../app/samples/poolside.jpg', import.meta.url).pathname);
-await page.waitForFunction(() => document.querySelectorAll('#pool .thumb').length === 6, null, { timeout: 10000 });
+// upload a local photo from disk — read as an object URL, never uploaded; the pool gains exactly one entry
+const beforeUpload = await page.locator('#pool .thumb').count();
+await page.setInputFiles('#file', new URL('../app/samples/low-tide.jpg', import.meta.url).pathname);
+await page.waitForFunction(
+  (n) => document.querySelectorAll('#pool .thumb').length === n + 1,
+  beforeUpload,
+  { timeout: 10000 },
+);
 out.poolAfterUpload = await page.locator('#pool .thumb').count();
+out.uploadAdded = out.poolAfterUpload - beforeUpload;
 
 // use for all, reset crop
 await page.click('#all-panels');

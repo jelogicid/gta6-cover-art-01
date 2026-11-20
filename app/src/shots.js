@@ -1,7 +1,7 @@
 // Fixed scenes for the screenshots. `?shot=cover` paints one poster at a post size and hands back its PNG data URL;
 // `?shot=editor` opens the whole studio with photos loaded. `window.__shotReady` is set once the frame is painted.
 
-import { drawCover, loadCoverFont, SIZES } from './render.js';
+import { drawCover, loadCoverFont, panelRects, heroBustBox, footerMetrics, SIZES } from './render.js';
 import { createState, loadSamplePhotos, addPhotos, syncPanels } from './state.js';
 import { createStudio } from './studio.js';
 
@@ -56,6 +56,10 @@ export async function runCoverShot(q) {
   window.__shotPNG = canvas.toDataURL('image/png');
   window.__shotSize = { w: size.w, h: size.h, tag: size.tag };
   window.__studioState = state;
+  // the panel rectangles and the crop each one resolved to, so a build script can check the framing by numbers
+  window.__shotGeo = panelRects(state, size.w, size.h);
+  window.__shotBust = heroBustBox(state, size.w, size.h);
+  window.__shotText = footerMetrics(state, size.w, size.h);
 
   await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));
   window.__shotReady = true;
