@@ -1,4 +1,4 @@
-Noto Sans, Black weight (NotoSans-Black.ttf)
+Noto Sans, Black weight (NotoSans-Black.woff2)
 ============================================
 
 The one typeface the app ships. Every headline, caption, panel plate and control label is set in it; the
