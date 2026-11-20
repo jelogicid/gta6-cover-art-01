@@ -1,5 +1,5 @@
 [
-  { "name": "1-cover.jpg", "shot": "cover", "query": "layout=hero&palette=vice&size=wide&title=Sunset%20Heist&caption=Palm%20Coast%20Never%20Sleeps&photos=gold-hour,the-car,pier,low-tide", "long": 1280 },
+  { "name": "1-cover.jpg", "shot": "cover", "query": "layout=hero&palette=vice&size=wide&title=Sunset%20Heist&caption=Palm%20Coast%20Never%20Sleeps&photos=gold-hour,pier,low-tide,the-car", "long": 1280 },
   { "name": "2-editor.jpg", "shot": "editor", "query": "layout=six&palette=vice&size=square&title=Gold%20Coast&caption=Six%20Scenes%20From%20The%20Strip&photos=gold-hour,palm-line,the-car,pier,low-tide,the-rod&select=1", "w": 1280, "h": 1000 },
   { "name": "3-cover-portrait.jpg", "shot": "cover", "query": "layout=hero&palette=neon&size=portrait&title=Night%20Moves&caption=Every%20Light%20Has%20A%20Price&photos=gold-hour,pier,the-car,low-tide", "long": 1280 },
   { "name": "4-cover-square.jpg", "shot": "cover", "query": "layout=quad&palette=gold&size=square&title=Gold%20Coast&caption=No%20Rules%20On%20The%20Boulevard&photos=gold-hour,palm-line,the-car,pier", "long": 1280 }

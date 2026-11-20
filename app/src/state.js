@@ -96,19 +96,20 @@ export const PHOTO_FRAMES = {
  * was framed for. A panel holding a different photo falls back to that photo's own frame above.
  */
 export const LAYOUT_FRAMES = {
-  // the hero panel is 2.2:1 on the landscape sheet and the three strips are 4:1. No 4:1 strip can hold a whole
-  // head, so each strip is framed on one named thing: a whole car mirror, a whole reel in a hand, a whole face.
-  // The festival seal sits on the right column's left edge at mid-height, so slot 3's subject is kept to the right
-  // of the strip and slot 2's to the left, and neither is buried under it.
+  // The hero panel is 2.2:1 on the landscape sheet and the three strips are 4.5:1. No strip that wide can hold a
+  // whole car element — The Car's mirror needs an aspect the strip cannot give it, and cropped to 4.5:1 the
+  // chrome reads as chrome, not as a car. So the right column is the rest of the crew, one nameable subject per
+  // strip: a fisherman's face, a second woman's face, a reel in a hand. The festival seal sits on the right
+  // column's left edge at mid-height, so each strip's subject is kept clear of it.
   hero: {
     wide: [
       { photo: 'gold-hour', cx: 0.5, cy: 0.462, zoom: 1 },
-      { photo: 'the-car', cx: 0.5, cy: 0.5525, zoom: 1 },
       { photo: 'pier', cx: 0.42, cy: 0.255, zoom: 1 },
       { photo: 'low-tide', cx: 0.83, cy: 0.385, zoom: 1.5 },
+      { photo: 'the-car', cx: 0.5, cy: 0.72, zoom: 1 },
     ],
     portrait: [
-      { photo: 'gold-hour', cx: 0.52, cy: 0.5, zoom: 1.2 },
+      { photo: 'gold-hour', cx: 0.52, cy: 0.68, zoom: 1.2 },
       { photo: 'pier', cx: 0.5, cy: 0.36, zoom: 1.1 },
       { photo: 'the-car', cx: 0.45, cy: 0.5, zoom: 1.25 },
       { photo: 'low-tide', cx: 0.68, cy: 0.5, zoom: 1 },

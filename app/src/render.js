@@ -69,6 +69,9 @@ export const SIZES = {
 
 const FONT_FAMILY = '"NotoCover", "Noto Sans", sans-serif';
 const CONDENSE = 0.79;
+// The footer caption's measure as a share of the footer's width. Shared by the renderer and the metrics so the
+// size a check reads is the size that was painted: a line set to the full sheet reads as a display line.
+const CAPTION_MEASURE = 0.84;
 const noise = makeNoiseTile();
 const dots = makeDotTile();
 
@@ -639,7 +642,7 @@ export function footerMetrics(state, W, H) {
   const caption = (state.caption || '').toUpperCase();
   const creditsW = footer.w * (isWide ? 0.26 : 0.3);
   const c2 = document.createElement('canvas').getContext('2d');
-  const led = captionLayout(c2, caption, footer.w * 0.96, fit.size, footer.h);
+  const led = captionLayout(c2, caption, footer.w * CAPTION_MEASURE, fit.size, footer.h);
   return {
     titleSize: fit.size, titleLines: fit.lines.length,
     captionSize: led.size, captionLines: led.lines.length, ratio: led.size / fit.size,
@@ -658,7 +661,7 @@ function captionLayout(ctx, caption, room, titleSize, footerH) {
   const legalRow = Math.max(11, footerH * 0.17);
   const padTop = footerH * 0.13;
   const blockH = Math.max(footerH * 0.3, footerH - legalRow - padTop);
-  const target = Math.min(titleSize / 3, blockH / 1.16, footerH * 0.42);
+  const target = Math.min(titleSize * 0.26, blockH / 1.16, footerH * 0.42);
 
   // Tracking is decoration, size is hierarchy: tighten the tracking to hold one line before giving up any height.
   for (const tracking of [0.14, 0.1, 0.06, 0.03]) {
@@ -702,19 +705,26 @@ function drawFooter(ctx, footer, state, pal, isWide, title) {
   ctx.fillStyle = pal.accent;
   ctx.fillRect(footer.x, ruleY, footer.w * 0.18, Math.max(2, footer.h * 0.03));
 
-  // The caption is a caption line above the credits now, not a band of its own: tracked caps at about a third of
-  // the wordmark's CAP height, on its own row across the sheet, so nothing squeezes it below that.
-  const blockTop = footer.y + footer.h * 0.13;
-  const led = captionLayout(ctx, caption, footer.w * 0.96, titleCap, footer.h);
+  // The caption is a caption, not a second title: it sits on the row immediately above the credits, at a third of
+  // the wordmark's cap height, so the rule above belongs to the grid and not to the line. Sizing comes first
+  // because the credits' baseline sets where the caption's own baseline lands.
+  // The caption's measure is capped well short of the sheet: a line that spans the full width reads as a display
+  // line at any point size, which is exactly what the wordmark must not have beside it.
+  const led = captionLayout(ctx, caption, footer.w * CAPTION_MEASURE, titleCap, footer.h);
   const capSize = led.size;
   const lines = led.lines;
+  const legalY = footer.y + footer.h - Math.max(3, led.legalRow * 0.32);
   const lineH = capSize * 1.16;
+  // Sit the caption on the credits' own row: ordinary spacing, so it reads as the line above the fine print
+  // rather than as a headline pinned to the rule at the top of the footer.
+  const capBaseline = legalY - Math.max(capSize * 0.62, footer.h * 0.1);
+
   ctx.save();
   ctx.font = `700 ${capSize}px ${FONT_FAMILY}`;
   ctx.letterSpacing = `${capSize * led.tracking}px`;
   ctx.fillStyle = hexAlpha(pal.cream, 0.84);
   for (let i = 0; i < lines.length; i++) {
-    ctx.fillText(lines[i], footer.x, blockTop + capSize * 0.78 + i * lineH);
+    ctx.fillText(lines[i], footer.x, capBaseline - (lines.length - 1 - i) * lineH);
   }
   ctx.restore();
   ctx.letterSpacing = '0px';
@@ -732,7 +742,6 @@ function drawFooter(ctx, footer, state, pal, isWide, title) {
     ctx.font = `700 ${fine}px ${FONT_FAMILY}`;
     ctx.letterSpacing = `${fine * 0.1}px`;
   }
-  const legalY = footer.y + footer.h - Math.max(3, led.legalRow * 0.32);
   ctx.fillStyle = hexAlpha(pal.cream, 0.46);
   ctx.fillText(legal, footer.x, legalY);
   ctx.letterSpacing = '0px';
@@ -852,8 +861,12 @@ export function heroBustBox(state, W, H) {
   const head = photo.head || face;
   const faceX = t.x + (face.x + face.w / 2) * t.dw;
   const faceY = t.y + (face.y + face.h * 0.44) * t.dh;
-  const rx = clamp(head.w * t.dw * 0.62, rect.w * 0.10, rect.w * 0.22);
-  const ry = clamp(head.h * t.dh * 0.62, rect.h * 0.16, rect.h * 0.44);
+  // The matte reaches a set distance up the sheet, not a fraction of the head box: the silhouette inside it is cut
+  // from the photograph's own luminance, so the extra height is empty sky and adds nothing, while the real hair
+  // inside it is what crosses the letters. Sizing from the head box left the crown short on a tall panel.
+  const apex = rect.y - H * (W / H > 1.4 ? 0.208 : 0.155);
+  const rx = clamp(head.w * t.dw * 0.62, rect.w * 0.10, rect.w * 0.24);
+  const ry = clamp(faceY - apex, rect.h * 0.16, rect.h * 1.1);
   return {
     cx: clamp(faceX, rect.x + rx * 0.6, rect.x + rect.w - rx * 0.6),
     cy: faceY, rx, ry, rect,
@@ -962,24 +975,41 @@ function drawHeroBust(ctx, geo, state, pal) {
   octx.fillStyle = wash2;
   octx.fillRect(bx0, by0, bw, bh);
 
-  // the silhouette, as its own canvas: an elliptical matte feathered just enough to hide its diameter
+  // The silhouette is cut from the photograph's own luminance, not from a geometric ellipse. An ellipse always
+  // carries whatever is inside it, so its apex brought the bright sky down with the hair and the sky, not her hair,
+  // is what crossed the letters. Her hair is the dark mass against that sky, so luminance is the real silhouette;
+  // a generous ellipse only bounds it to the region around her head.
   const matte = document.createElement('canvas');
   matte.width = cw;
   matte.height = ch;
   const mctx = matte.getContext('2d');
+  mctx.translate(pad + rx - cx, pad + ry - cy);
+  mctx.drawImage(photo.img, t.x, t.y, t.dw, t.dh);
+  const shot = mctx.getImageData(0, 0, cw, ch);
+  const sd = shot.data;
+  for (let i = 0; i < sd.length; i += 4) {
+    const lum = 0.2126 * sd[i] + 0.7152 * sd[i + 1] + 0.0722 * sd[i + 2];
+    // soft threshold: hair and the dark tee are opaque, sky and sand fall away
+    sd[i + 3] = Math.round(255 * clamp((168 - lum) / 62, 0, 1));
+    sd[i] = 255; sd[i + 1] = 255; sd[i + 2] = 255;
+  }
+  mctx.putImageData(shot, 0, 0);
+
+  // bound it to her head: the ellipse is wider and taller than the head so the crown is never clipped
+  mctx.globalCompositeOperation = 'destination-in';
   mctx.save();
+  mctx.setTransform(1, 0, 0, 1, 0, 0);
   mctx.translate(pad + rx, pad + ry);
   mctx.scale(1, ry / rx);
-  const mask = mctx.createRadialGradient(0, 0, rx * 0.55, 0, 0, rx);
-  mask.addColorStop(0, 'rgba(255,255,255,1)');
-  mask.addColorStop(0.965, 'rgba(255,255,255,1)');
-  // a crisp rim, only a few pixels of feather: the cut edge is the thing the rim light and shadow hang on
-  mask.addColorStop(1, 'rgba(255,255,255,0)');
-  mctx.fillStyle = mask;
+  const bound = mctx.createRadialGradient(0, 0, rx * 0.86, 0, 0, rx);
+  bound.addColorStop(0, 'rgba(255,255,255,1)');
+  bound.addColorStop(1, 'rgba(255,255,255,0)');
+  mctx.fillStyle = bound;
   mctx.beginPath();
   mctx.arc(0, 0, rx, 0, Math.PI * 2);
   mctx.fill();
   mctx.restore();
+  mctx.globalCompositeOperation = 'source-over';
 
   octx.setTransform(1, 0, 0, 1, 0, 0);
   octx.globalCompositeOperation = 'destination-in';
