@@ -2,25 +2,25 @@
   "shots": [
     {
       "name": "1-cover.jpg",
-      "bytes": 208478,
+      "bytes": 191988,
       "w": 1280,
       "h": 720
     },
     {
       "name": "2-editor.jpg",
-      "bytes": 237696,
+      "bytes": 241442,
       "w": 1280,
       "h": 1000
     },
     {
       "name": "3-cover-portrait.jpg",
-      "bytes": 220731,
+      "bytes": 254340,
       "w": 1024,
       "h": 1280
     },
     {
       "name": "4-cover-square.jpg",
-      "bytes": 218139,
+      "bytes": 245806,
       "w": 1080,
       "h": 1080
     }
@@ -31,21 +31,21 @@
     {
       "key": "square",
       "name": "palm-coast-cover-1080x1080.png",
-      "bytes": 1916406,
+      "bytes": 1826899,
       "w": 1080,
       "h": 1080
     },
     {
       "key": "portrait",
       "name": "palm-coast-cover-1080x1350.png",
-      "bytes": 2421363,
+      "bytes": 2332516,
       "w": 1080,
       "h": 1350
     },
     {
       "key": "wide",
       "name": "palm-coast-cover-1920x1080.png",
-      "bytes": 3251078,
+      "bytes": 3166157,
       "w": 1920,
       "h": 1080
     }

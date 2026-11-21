@@ -25,7 +25,9 @@ export const SUBJECTS = {
     head: { x: 0, y: 0.12, w: 0.37, h: 0.58 },
   },
   'the-car': {
-    subj: { x: 0.10, y: 0.453, w: 0.215, h: 0.192 },
+    // The chrome lever handle is the one whole object in the file: fully inside the frame with margin on all
+    // sides and a landscape shape that suits a rail cell. The side mirror spills past the left edge.
+    subj: { x: 0.625, y: 0.665, w: 0.165, h: 0.075 },
   },
   pier: {
     face: { x: 0.265, y: 0.15, w: 0.28, h: 0.205 },
@@ -102,9 +104,9 @@ export const LAYOUT_FRAMES = {
   hero: {
     wide: [
       { photo: 'gold-hour', cx: 0.5, cy: 0.3, zoom: 1 },
-      { photo: 'pier', cx: 0.5, cy: 0.29, zoom: 1.3 },
-      { photo: 'low-tide', cx: 0.78, cy: 0.45, zoom: 1.5 },
-      { photo: 'the-car', cx: 0.21, cy: 0.57, zoom: 2.4 },
+      { photo: 'pier', cx: 0.4, cy: 0.3, zoom: 1.3 },
+      { photo: 'low-tide', cx: 0.83, cy: 0.385, zoom: 2.4 },
+      { photo: 'the-car', cx: 0.7075, cy: 0.7025, zoom: 2.2 },
     ],
     portrait: [
       { photo: 'gold-hour', cx: 0.52, cy: 0.68, zoom: 1.2 },

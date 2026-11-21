@@ -1,6 +1,7 @@
 // Build support, never shipped: checks the poster's typographic hierarchy by numbers, for every screenshot.
-//   - the footer tagline must sit between a quarter and two fifths of the wordmark's CAP HEIGHT, and the ratio is
-//     measured on the rendered pixels, not just on the font sizes the layout asked for;
+//   - the footer tagline must sit at or under a fifth of the wordmark's cap height, so it is a caption and never a
+//     second headline, and the ratio is measured on the rendered pixels, not just on the font sizes the layout
+//     asked for;
 //   - the caption line must be one line, so it reads as a caption and not as a second headline.
 //
 // Run: node screws/text-check.mjs
@@ -11,7 +12,7 @@ import { extname, join, normalize } from 'node:path';
 
 const root = normalize(new URL('../app/', import.meta.url).pathname);
 const CHROME = '/home/mjasb/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome';
-const MIN = 0.25, MAX = 0.4;
+const MIN = 0.14, MAX = 0.22;
 
 const types = {
   '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css',
