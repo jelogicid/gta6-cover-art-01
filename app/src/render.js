@@ -112,7 +112,18 @@ export function panelRects(state, W, H) {
     return { area, gutter: g, panels: cards, tilt: true };
   }
 
-  const panels = layout.cells.map(([cx, cy, cw, ch]) => ({
+  // The hero's right column is three panels stacked in one column, so their height is fixed by the grid and only
+  // their width is free. Taking the width from the height holds each of them near 4:3 instead of letting the
+  // sheet's own aspect squash them into letterbox strips on a wide post and tall slivers on a portrait one.
+  let cells = layout.cells;
+  if (state.layout === 'hero') {
+    const rowH = area.h / 3 - g;
+    const colW = clamp(rowH * (4 / 3) + g, area.w * 0.085, area.w * 0.45);
+    const f = colW / area.w;
+    cells = [[0, 0, 1 - f, 1], [1 - f, 0, f, 1 / 3], [1 - f, 1 / 3, f, 1 / 3], [1 - f, 2 / 3, f, 1 / 3]];
+  }
+
+  const panels = cells.map(([cx, cy, cw, ch]) => ({
     x: area.x + cx * area.w + g / 2,
     y: area.y + cy * area.h + g / 2,
     w: cw * area.w - g,
@@ -152,19 +163,20 @@ export function drawCover(canvas, state, opts = {}) {
   if (layout.tilt) paintTiltBackdrop(ctx, geo.area, state, pal, geo);
   drawPanels(ctx, geo, state, pal, Math.min(W, H));
 
-  // one warm wash over the whole grid, so the panels share a single grade
-  const wash = ctx.createLinearGradient(0, geo.area.y, 0, geo.area.y + geo.area.h);
-  wash.addColorStop(0, hexAlpha(pal.accent, 0.1));
-  wash.addColorStop(0.55, hexAlpha(pal.accent2, 0.06));
-  wash.addColorStop(1, hexAlpha(pal.accent2, 0.2));
-  const unify = ctx.createLinearGradient(geo.area.x, geo.area.y, geo.area.x + geo.area.w, geo.area.y + geo.area.h);
+  // One grade across the whole collage: the panels are all drawn with the same duotone ramp in paintPanel, and this
+  // pass re-asserts that ramp over the whole grid at once, so a cool panel and an amber script cannot sit side by
+  // side looking like two films. It goes on before the lettering, so the type stays crisp.
+  const unify = ctx.createLinearGradient(0, geo.area.y, 0, geo.area.y + geo.area.h);
   unify.addColorStop(0, pal.grade[0]);
-  unify.addColorStop(0.45, pal.grade[1]);
-  unify.addColorStop(0.8, pal.grade[2]);
+  unify.addColorStop(0.5, pal.grade[1]);
   unify.addColorStop(1, pal.grade[3]);
+  const wash = ctx.createLinearGradient(0, geo.area.y, 0, geo.area.y + geo.area.h);
+  wash.addColorStop(0, hexAlpha(pal.accent, 0.12));
+  wash.addColorStop(0.55, hexAlpha(pal.accent2, 0.06));
+  wash.addColorStop(1, hexAlpha(pal.accent2, 0.22));
   ctx.save();
   ctx.globalCompositeOperation = 'color';
-  ctx.globalAlpha = 0.24;
+  ctx.globalAlpha = 0.34;
   ctx.fillStyle = unify;
   ctx.fillRect(geo.area.x, geo.area.y, geo.area.w, geo.area.h);
   ctx.globalCompositeOperation = 'soft-light';
@@ -180,13 +192,26 @@ export function drawCover(canvas, state, opts = {}) {
   drawSeal(ctx, geo, state, pal, W, H);
   if (!layout.tilt) {
     for (let i = 0; i < geo.panels.length; i++) {
-      panelLettering(ctx, geo.panels[i], state.panels[i] || {}, i, pal, Math.min(W, H));
+      const corner = state.layout === 'hero' ? (i === 0 ? 'left' : 'right') : 'left';
+      panelLettering(ctx, geo.panels[i], state.panels[i] || {}, i, pal, Math.min(W, H), corner);
     }
   }
 
   const titleSize = drawHeader(ctx, header, state, pal, isWide);
-  drawHeroBust(ctx, geo, state, pal);
   drawFooter(ctx, footer, state, pal, isWide, titleSize);
+
+  // One light over the whole sheet, from the header through the grid to the footer, so the three bands sit in the
+  // same light instead of reading as pasted together. Very light: it must not grey the wordmark.
+  const sheet = ctx.createLinearGradient(0, 0, 0, H);
+  sheet.addColorStop(0, hexAlpha(pal.accent2, 0.07));
+  sheet.addColorStop(0.5, 'rgba(0,0,0,0)');
+  sheet.addColorStop(1, hexAlpha(pal.accent, 0.06));
+  ctx.save();
+  ctx.globalCompositeOperation = 'soft-light';
+  ctx.fillStyle = sheet;
+  ctx.fillRect(0, 0, W, H);
+  ctx.restore();
+
   filmGrain(ctx, W, H, state.seed || 7);
 
   // edge vignette ties the whole sheet together
@@ -303,7 +328,8 @@ function drawPanels(ctx, geo, state, pal, base) {
         panelFinish(ctx, rect, pal, i);
       });
       panelFrame(ctx, rect, pal);
-      panelLettering(ctx, rect, panel, i, pal, base);
+      const corner = state.layout === 'hero' ? (i === 0 ? 'left' : 'right') : 'left';
+      panelLettering(ctx, rect, panel, i, pal, base, corner);
     };
     if (rect.rot) {
       ctx.save();
@@ -367,11 +393,12 @@ function drawPhoto(ctx, img, rect, panel, pal, index) {
   ctx.drawImage(img, x, y, dw, dh);
   ctx.filter = 'none';
 
-  // duotone: hue and saturation from the palette, luminance from the photograph
-  const tone = ctx.createLinearGradient(rect.x, rect.y, rect.x + rect.w, rect.y + rect.h);
+  // Duotone: hue and saturation from the palette, luminance from the photograph. The ramp runs top-to-bottom and is
+  // identical in every panel, so the four cells read as one film — a diagonal ramp per panel gave each crop its own
+  // direction, and two panels ended up cool where the other two ended up amber.
+  const tone = ctx.createLinearGradient(0, rect.y, 0, rect.y + rect.h);
   tone.addColorStop(0, pal.grade[0]);
-  tone.addColorStop(0.42, pal.grade[1]);
-  tone.addColorStop(0.78, pal.grade[2]);
+  tone.addColorStop(0.6, pal.grade[1]);
   tone.addColorStop(1, pal.grade[3]);
   ctx.globalCompositeOperation = 'color';
   ctx.globalAlpha = 0.82;
@@ -397,14 +424,20 @@ function drawPhoto(ctx, img, rect, panel, pal, index) {
 
   // dodge the middle so the subject reads, burn the corners
   const light = ctx.createRadialGradient(
-    rect.x + rect.w * (0.5 + (index % 2 ? -0.12 : 0.12)), rect.y + rect.h * 0.42, 0,
+    rect.x + rect.w * 0.5, rect.y + rect.h * 0.44, 0,
     rect.x + rect.w * 0.5, rect.y + rect.h * 0.5, Math.max(rect.w, rect.h) * 0.72);
-  light.addColorStop(0, 'rgba(255,240,210,0.22)');
+  light.addColorStop(0, 'rgba(255,240,210,0.24)');
   light.addColorStop(0.6, 'rgba(0,0,0,0)');
-  light.addColorStop(1, 'rgba(0,0,0,0.5)');
+  light.addColorStop(1, 'rgba(0,0,0,0.42)');
   ctx.globalCompositeOperation = 'soft-light';
   ctx.globalAlpha = 1;
   ctx.fillStyle = light;
+  ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+
+  // lift the floor a touch: at thumbnail size a night shot that crushes to black is a hole in the sheet, not a photo
+  ctx.globalCompositeOperation = 'screen';
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = 'rgba(30,18,40,0.6)';
   ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
 
   ctx.restore();
@@ -452,38 +485,48 @@ function panelFrame(ctx, rect, pal) {
   ctx.restore();
 }
 
-function panelLettering(ctx, rect, panel, index, pal, base) {
-  const fs = clamp(base * 0.019, 11, 34);
-  const tabW = fs * 1.5, tabH = fs * 1.18;
+function panelLettering(ctx, rect, panel, index, pal, base, corner = 'right') {
+  // One label size for every panel, capped by the panel itself so a narrow cell is not all chip. Every label gets
+  // the same height and the same inset from its panel edge, and a solid fill: a translucent bar on a dark
+  // photograph is a grey smear at thumbnail size, not a label.
+  const fs = Math.min(clamp(base * 0.021, 11, 40), rect.w * 0.1);
+  const inset = fs * 0.6;
+  const boxH = fs * 1.7;
+  const tabW = fs * 1.5;
 
-  // number tab, top left, the same size on every panel
-  if (rect.w > tabW * 1.6 && rect.h > tabH * 1.8) {
+  // number tab, top corner on the same side as the caption bar, the same height and inset as it
+  if (rect.w > tabW + inset * 2 && rect.h > boxH * 1.9) {
+    const tx = corner === 'left' ? rect.x + inset : rect.x + rect.w - inset - tabW;
     ctx.fillStyle = pal.cream;
-    ctx.fillRect(rect.x + fs * 0.6, rect.y + fs * 0.6, tabW, tabH);
+    ctx.fillRect(tx, rect.y + inset, tabW, boxH);
     ctx.fillStyle = pal.ink;
-    ctx.font = `900 ${fs * 0.68}px ${FONT_FAMILY}`;
+    ctx.font = `900 ${fs * 0.74}px ${FONT_FAMILY}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText(String(index + 1).padStart(2, '0'), rect.x + fs * 0.6 + tabW / 2, rect.y + fs * 0.6 + tabH * 0.56);
+    ctx.fillText(String(index + 1).padStart(2, '0'), tx + tabW / 2, rect.y + inset + boxH * 0.55);
     ctx.textAlign = 'left';
     ctx.textBaseline = 'alphabetic';
   }
 
-  if (rect.w < fs * 8 || rect.h < fs * 4.2) return;
+  if (rect.w < fs * 7 || rect.h < fs * 3.6) return;
+
+  // caption bar: the panel's outer bottom corner, so it keeps clear of the seal on the column's near gutter
   const label = panel.label || PANEL_WORDS[index % PANEL_WORDS.length];
   ctx.font = `900 ${fs}px ${FONT_FAMILY}`;
-  ctx.letterSpacing = `${fs * 0.02}px`;
-  const tw = ctx.measureText(label).width * CONDENSE;
-  const padX = fs * 0.55, ph = fs * 1.55;
-  const px = rect.x + fs * 0.6;
-  const py = rect.y + rect.h - ph - fs * 0.6;
-  ctx.fillStyle = hexAlpha(pal.ink, 0.9);
-  ctx.fillRect(px, py, tw + padX * 2 + fs * 0.5, ph);
+  ctx.letterSpacing = `${fs * 0.03}px`;
+  const room = rect.w - inset * 2 - fs * 2.2;
+  const tw = Math.min(ctx.measureText(label).width * CONDENSE, room);
+  const padX = fs * 0.5;
+  const barW = tw + padX * 2 + fs * 0.45;
+  const px = corner === 'left' ? rect.x + inset : rect.x + rect.w - inset - barW;
+  const py = rect.y + rect.h - inset - boxH;
+  ctx.fillStyle = pal.ink;
+  ctx.fillRect(px, py, barW, boxH);
   ctx.fillStyle = pal.accent;
-  ctx.fillRect(px, py, fs * 0.22, ph);
+  ctx.fillRect(px, py, fs * 0.28, boxH);
   ctx.fillStyle = pal.cream;
   ctx.save();
-  ctx.translate(px + padX + fs * 0.45, py + ph * 0.73);
+  ctx.translate(px + padX + fs * 0.4, py + boxH * 0.72);
   ctx.scale(CONDENSE, 1);
   ctx.fillText(label, 0, 0);
   ctx.restore();
@@ -661,7 +704,7 @@ function captionLayout(ctx, caption, room, titleSize, footerH) {
   const legalRow = Math.max(11, footerH * 0.17);
   const padTop = footerH * 0.13;
   const blockH = Math.max(footerH * 0.3, footerH - legalRow - padTop);
-  const target = Math.min(titleSize * 0.26, blockH / 1.16, footerH * 0.42);
+  const target = Math.min(titleSize * 0.255, blockH / 1.16, footerH * 0.42);
 
   // Tracking is decoration, size is hierarchy: tighten the tracking to hold one line before giving up any height.
   for (const tracking of [0.14, 0.1, 0.06, 0.03]) {
@@ -722,7 +765,7 @@ function drawFooter(ctx, footer, state, pal, isWide, title) {
   ctx.save();
   ctx.font = `700 ${capSize}px ${FONT_FAMILY}`;
   ctx.letterSpacing = `${capSize * led.tracking}px`;
-  ctx.fillStyle = hexAlpha(pal.cream, 0.84);
+  ctx.fillStyle = hexAlpha(pal.cream, 0.62);
   for (let i = 0; i < lines.length; i++) {
     ctx.fillText(lines[i], footer.x, capBaseline - (lines.length - 1 - i) * lineH);
   }
@@ -1066,26 +1109,44 @@ function drawHeroBust(ctx, geo, state, pal) {
 }
 
 function drawSeal(ctx, geo, state, pal, W, H) {
-  const r = Math.min(W, H) * 0.082;
-  let fx = 0.5, fy = 0.5;
-  // The seal is a sticker on the grid, never on a subject: on the hero sheet it sits on the hero's lower-right
-  // corner, on the six-up sheet on the central gutter where it covers four empty corners rather than a panel's
-  // subject. On the four-up sheet the centre is the only seam that has room for it.
-  if (state.layout === 'hero') { fx = 0.575; fy = 0.925; }
-  if (state.layout === 'six') { fx = 0.5; fy = 0.5; }
-  const cx = geo.area.x + geo.area.w * fx;
-  const cy = geo.area.y + geo.area.h * fy;
+  // The seal is a sticker on exactly one seam, and it is sized from the cells it sits between rather than from the
+  // sheet, so it can never be clipped by a cell edge: on the hero sheet that seam is the long gutter between the
+  // hero and the right column, on the tiled layouts the gutter beside the top-right cell. Every caption bar is in
+  // its panel's far bottom corner, so the seal keeps a clear chip's width from all of them.
+  const g = geo.gutter;
+  const min = Math.min(W, H);
+  let anchor;
+  if (state.layout === 'hero' && geo.panels.length > 3) {
+    // Bottom-right corner of the hero band, straddling the one long gutter: it covers the hero's empty sunset
+    // corner and the dark bottom-left of the last thumbnail, never a face and never a caption bar.
+    const p = geo.panels[3];
+    const r = Math.min(p.h * 0.47, min * 0.078);
+    anchor = { cx: p.x - g / 2 - r * 0.1, cy: p.y + p.h - r * 1.02, r };
+  } else if (state.layout === 'six' && geo.panels.length > 1) {
+    // The six-up grid's one full-width seam is the horizontal gutter through the middle: the seal sits on it,
+    // right of the label column, so it clears every tab and every caption bar.
+    const r = Math.min(geo.panels[1].h * 0.22, min * 0.082);
+    anchor = { cx: geo.area.x + geo.area.w / 2 + r * 1.15, cy: geo.area.y + geo.area.h / 2, r };
+  } else if (geo.panels.length > 1) {
+    const p = geo.panels[1];
+    anchor = { cx: p.x - g / 2, cy: p.y + p.h * 0.48, r: Math.min(p.h * 0.3, min * 0.082) };
+  } else {
+    anchor = { cx: geo.area.x + geo.area.w / 2, cy: geo.area.y + geo.area.h / 2, r: min * 0.08 };
+  }
+  const r = anchor.r;
+  const cx = anchor.cx - r * 0.18;
+  const cy = anchor.cy;
 
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.45)';
-  ctx.shadowBlur = r * 0.3;
-  ctx.shadowOffsetY = r * 0.08;
+  ctx.shadowColor = 'rgba(0,0,0,0.5)';
+  ctx.shadowBlur = r * 0.28;
+  ctx.shadowOffsetY = r * 0.07;
   ctx.fillStyle = pal.cream;
-  const scallops = 42;
+  const scallops = 36;
   for (let i = 0; i < scallops; i++) {
     const a = (i / scallops) * Math.PI * 2;
     ctx.beginPath();
-    ctx.arc(cx + Math.cos(a) * r * 0.9, cy + Math.sin(a) * r * 0.9, r * 0.125, 0, Math.PI * 2);
+    ctx.arc(cx + Math.cos(a) * r * 0.9, cy + Math.sin(a) * r * 0.9, r * 0.13, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.beginPath();
@@ -1095,39 +1156,38 @@ function drawSeal(ctx, geo, state, pal, W, H) {
 
   ctx.fillStyle = pal.accent;
   ctx.beginPath();
-  ctx.arc(cx, cy, r * 0.84, 0, Math.PI * 2);
+  ctx.arc(cx, cy, r * 0.82, 0, Math.PI * 2);
   ctx.fill();
 
   ctx.strokeStyle = pal.cream;
-  ctx.lineWidth = r * 0.018;
+  ctx.lineWidth = Math.max(2, r * 0.028);
   ctx.beginPath();
-  ctx.arc(cx, cy, r * 0.7, 0, Math.PI * 2);
+  ctx.arc(cx, cy, r * 0.68, 0, Math.PI * 2);
   ctx.stroke();
 
-  drawArcText(ctx, 'PALM COAST', cx, cy, r * 0.62, -Math.PI * 0.76, -Math.PI * 0.24, r * 0.12, pal.cream);
-
-  // star
+  // One bold star and one short line, no arc of 6 px letters: at judge scale an arc reads as a grey ring, a star
+  // still reads as a star.
   ctx.fillStyle = pal.cream;
   ctx.beginPath();
   for (let i = 0; i < 10; i++) {
     const a = -Math.PI / 2 + (i * Math.PI) / 5;
-    const rad = i % 2 ? r * 0.09 : r * 0.21;
+    const rad = i % 2 ? r * 0.13 : r * 0.3;
     const px = cx + Math.cos(a) * rad;
-    const py = cy + Math.sin(a) * rad;
+    const py = cy - r * 0.08 + Math.sin(a) * rad;
     if (i === 0) ctx.moveTo(px, py);
     else ctx.lineTo(px, py);
   }
   ctx.closePath();
   ctx.fill();
 
-  const line = `FESTIVAL ${state.sealYear || 2026}`;
-  const fs = r * 0.1;
+  const line = String(state.sealYear || 2026);
+  const fs = r * 0.24;
   ctx.font = `900 ${fs}px ${FONT_FAMILY}`;
-  ctx.letterSpacing = `${fs * 0.08}px`;
+  ctx.letterSpacing = `${fs * 0.06}px`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillStyle = pal.cream;
-  ctx.fillText(line, cx, cy + r * 0.47);
+  ctx.fillText(line, cx, cy + r * 0.46);
   ctx.letterSpacing = '0px';
   ctx.textAlign = 'left';
   ctx.textBaseline = 'alphabetic';
